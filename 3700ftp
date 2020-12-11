@@ -2,13 +2,11 @@
 
 import socket                                                   # Import socket module
 import argparse                                                 # Import argument parser module
-from urlparse import urlparse					# Import url parser module
-import re							# Import regular expression module
-
+from urlparse import urlparse                                   # Import url parser module
+import re                                                       # Import regular expression module
+import os
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)           # Create a socket object
-
 #################### GLOBAL VARIABLES ######################
-
 _size = -1
 MSG = ""
 url= ""
@@ -17,85 +15,65 @@ pass_ip = ""
 ex_file = ""
 upload_file = ''
 download_file = ''
+moving = False
+copy_local = False
 #upload_file = None
-
 ###################    PASSIVE PORT    ######################
-
-# Opens socket to send and recieve from data channel 
+# Opens socket to send and recieve from data channel
 def conn_data():
   global MSG
   s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  print 'opening data channel on ip: ' + pass_ip 
+  print 'opening data channel on ip: ' + pass_ip
   print 'opening data channel on port: %d' % pass_port
   s2.connect((pass_ip, pass_port))
-
   type_ = 'TYPE I\r\n'
-  MSG += type_
-
-  #D_MSG = type_
-  #s2.sendall(type_) 
-
-  #if upload_file:
-    #print('START UPLOAD') 
-
-  #else:
-    #print('START DOWNLOAD')
-  
 
   if upload_file != '':
-    print('the file that will be sent is %s' % ex_file) 
-    #print type(ex_file)
+    print('the file that will be sent is %s' % ex_file)
     f = open(ex_file, 'rb')
-    #D_MSG += 'STOR %s\r\n' % ex_file
     print('about to send the file')
-    #MSG += 'STOR %s\r\n' % f
-    filename = ex_file.split('/')[1]
-    print('hopefully only the filename %s' % filename)
-    print('upload file to this path %s' % ('@' + url.hostname + '/' + filename))
-    MSG += 'STOR %s\r\n' % ('@' + url.hostname + '/' + filename)
+    filename = ''
+    if "/" not in ex_file:
+        filename = ex_file
+    else:
+        filename = ex_file.split('/')[1]
     s2.sendall(f.read())
-    MSG += 'STOR %s\r\n' % ('@' + url.hostname + '/' + filename)
-    #print('upload file to this path %s' % url.path)
-    #MSG += 'STOR %s\r\n' % url.path
-    #MSG += 'STOR %s\r\n' % ex_file
-    #MSG += 'STOR %s\r\n' % f
     print('the file that has been read is %s' % f.read())
     f.close()
+    if moving:
+      if os.path.exists(ex_file):
+        os.remove(ex_file)
     s2.close()
   else:
+    print('INSIDE THE ELSE CASE')
     dc_data = s2.recv(1024)
-    MSG += 'RETR %s\r\n' % url.path
     print(dc_data)
-    #while 1:
-      #print('Listen for data')
-      #f = open(ex_file, 'rb')
-      # print 'listen for data'
-      #dc_data = s2.recv(1024)
-      #print(dc_data)
-      #f.close()
-      #break
+    if copy_local:
+      print('copying file to local machine')
+      print('Is there a val for exfile? %s' % ex_file)
+      filename = ''
+      if "/" not in url.path:
+        filename = url.path
+      else:
+        filename = url.path.split('/')[-1]
+      print('THE FILE IS CALLED %s' % filename)
+      f = open(filename, 'a')
+      f.close()
     s2.close()
-
   s2.close()
-
 # Opens and closes the data channel
-
 def open_pass():
   global MSG
   MSG += 'PASV\r\n'
-
 def close_pass():
   global MSG
   MSG += 'QUIT\r\n'
-
 # Functions to read the ip-port code
-
 def get_port(top, bot):
   global pass_port
   pass_port = int(top) * 256 + int(bot)
   print pass_port
   conn_data()
-
 def get_ip(ipp):
   global pass_ip
   top = 0
@@ -111,10 +89,8 @@ def get_ip(ipp):
     elif i == 5:
       bot = ipp[i]
       print "this is the bot %s" % bot
-
   print pass_ip
-  get_port(top, bot)  
-
+  get_port(top, bot)
 def ip_port(ipp):
   print ipp
   ipp_ = re.split('[^0-9]', ipp)
@@ -123,10 +99,7 @@ def ip_port(ipp):
   print ipp_
   get_ip(ipp_)
 
-
-
 #################### COMMAND LINE LOGIN   ####################
-
 def login():
   global MSG
   user_ = 'USER %s\r\n' %  url.username
@@ -134,82 +107,64 @@ def login():
   type_ = 'TYPE I\r\n'
   mode_ = 'MODE S\r\n'
   file_o = 'STRU F\r\n'
-    
   print pw_
   print user_
   MSG += user_ + pw_ + type_ + mode_ + file_o
-
 #################### COMMAND LINE FUNCTIONS ####################
-
 def ls_():
   global MSG
   open_pass()
   ls = 'LIST %s\r\n' % url.path
   MSG += ls
-
 def mkdir_():
   global MSG
   new_dir = 'MKD %s\r\n' % url.path
   MSG += new_dir
-
 def rm_():
   global MSG
   remove = 'DELE %s\r\n' % url.path
   MSG += remove
-
 def rmdir_():
   global MSG
   rem_dir = 'RMD %s\r\n' % url.path
   MSG += rem_dir
 
-
 ############# DATA CHANNEL OPERATIONS ##############
 def cp_():
   global MSG
   open_pass()
-  #filename = ex_file.split('/')[1]
-  #f_ = 'STOR %s\r\n' % (url.hostname + '/' + filename)
-  f_ = 'STOR %s\r\n' % ex_file 
+  print(ex_file)
+  f_ = 'STOR %s\r\n' % ex_file
   MSG += f_
-  #open_pass()
-  #close_pass()
-
 def cp_download():
-  global MSG
+  global MSG, copy_local
+  copy_local = True
   open_pass()
   file_ = 'RETR %s\r\n' % url.path
-  #copy_file = 'STOR %s\r\n' % ex_file
-  MSG += file_ #+ copy_file 
-  #open_pass()  
- 
+  MSG += file_
 def mv_():
-  global MSG, upload_file
-  upload_file = True
+  global MSG, moving
+  moving = True
   open_pass()
-  f_ = 'RETR %s\r\n' % url.path
+  print('The file to move is %s' % ex_file)
   movef = 'STOR %s\r\n' % ex_file
-  del_f = 'RMD %s\r\n' % url.path
-  MSG += f_ + movef + del_f
-
+  MSG += movef 
 def mv_download():
-  global MSG, upload_file
-  upload_file = False
+  global MSG, copy_local
+  copy_local = True
   open_pass()
   f_ = 'RETR %s\r\n' % url.path
-  movef = 'STOR %s\r\n' % ex_file
-  del_f = 'RMD %s\r\n' % url.path
-  MSG += f_ + movef + del_f
-
+  del_f = 'DELE %s\r\n' % url.path
+  MSG += f_ + del_f
 #################### COMMAND LINE PARSING ####################
-# Handle different command line arguments and flags 
+# Handle different command line arguments and flags
 parser = argparse.ArgumentParser()
 parser.add_argument('operation', type=str, help='the required operaiton name')
 parser.add_argument('param_1', type=str, nargs=argparse.REMAINDER,  help='the required first parameter')
-
+parser.add_argument('-v', '--verbose', action='store_true', help='Print all messages to and from the FTP server')
 args = parser.parse_args()
 print args.operation
 print args.param_1
-
 # figure out the number of parameters for the operation
 if args.param_1:
   params = args.param_1
@@ -226,11 +181,10 @@ if args.param_1:
       print ex_file
   else:
     url = urlparse(params[0])
-
   host = url.hostname
   port = url.port
+  print(host, port)
   login()
-
 # Determine which kind of operation was asked for
 if args.operation:
   op = args.operation
@@ -262,38 +216,37 @@ if args.operation:
         mv_download()
       else:
         print('upload to server')
+        upload_file = ex_file
         mv_()
     else:
       print "need 2 arguments"
   else:
     print('not a valid command')
-
 #################### ESTABLISH CONNECTION  ####################
-
 # connect to the FTP server
+print(host, port)
+if port is None:
+    port = 21
 s.connect((host, port))
 print MSG
 MSG += 'QUIT\r\n'
-
 s.sendall(MSG)
-
 while 1:
   data = s.recv(8192)
   if not data:
-    break
+      break
   print data
   answer = data
   flag = answer.rsplit()
   print flag
-  # look for passive mode code 
+  # look for passive mode code
   if '227' in flag:
     idx = flag.index('227')
     print idx
+    print "flag is ", flag
     #print flag[idx + 4]
     ip_port(flag[idx + 4])
-
   # look for the goodbye code
   if '221' in flag:
     break
-
 s.close()
